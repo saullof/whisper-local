@@ -1,4 +1,6 @@
 services:
   whisper:
     build: .
+    ports:
+      - "9005:8000"   # Porta externa 9005 -> porta interna 8000
     restart: unless-stopped
