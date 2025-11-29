@@ -1,0 +1,7 @@
+services:
+  whisper:
+    build: .
+    # container_name: whisper-local   # pode tirar para evitar o aviso do EasyPanel
+    ports:
+      - "8085:8000"   # porta externa 8085 -> porta interna 8000
+    restart: unless-stopped
