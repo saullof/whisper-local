@@ -35,6 +35,8 @@ async def transcribe(file: UploadFile = File(...), language: str | None = None):
         segments, info = model.transcribe(
             tmp_path,
             language=language,
+            vad_filter=True,  
+            vad_parameters=dict(min_silence_duration_ms=300),
         )
 
         # Texto completo
