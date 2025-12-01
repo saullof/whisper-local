@@ -5,12 +5,10 @@ import tempfile
 import shutil
 import os
 
-# Variáveis de ambiente (podem ser configuradas na aba Ambiente do EasyPanel, se quiser)
 MODEL_NAME = os.getenv("WHISPER_MODEL", "small")
 DEVICE = os.getenv("WHISPER_DEVICE", "cpu")  # "cpu" ou "cuda"
-COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")  # int8, int8_float32, float16...
+COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 
-# Carrega o modelo na inicialização
 model = WhisperModel(MODEL_NAME, device=DEVICE, compute_type=COMPUTE_TYPE)
 
 app = FastAPI(title="Whisper Local API")
@@ -31,14 +29,48 @@ async def transcribe(file: UploadFile = File(...), language: str | None = None):
         tmp_path = tmp.name
 
     try:
-        segments, info = model.transcribe(tmp_path, language=language)
-        text = "".join(seg.text for seg in segments)
+        # 👇 AQUI: pedimos timestamps de palavra
+        segments, info = model.transcribe(
+            tmp_path,
+            language=language,
+            word_timestamps=True,
+        )
+
+        full_text = "".join(seg.text for seg in segments)
+
+        segment_data = []
+        for seg in segments:
+            words = []
+            # seg.words só existe se word_timestamps=True
+            if getattr(seg, "words", None) is not None:
+                for w in seg.words:
+                    words.append({
+                        "word":  w.word,
+                        "start": float(w.start),
+                        "end":   float(w.end),
+                    })
+
+            segment_data.append({
+                "start": float(seg.start),
+                "end":   float(seg.end),
+                "text":  seg.text,
+                "words": words,
+            })
+
+        # duration: usa info.duration ou o fim do último segmento
+        if getattr(info, "duration", None):
+            duration = float(info.duration)
+        elif segment_data:
+            duration = float(segment_data[-1]["end"])
+        else:
+            duration = 0.0
 
         return JSONResponse(
             {
-                "text": text.strip(),
+                "text": full_text.strip(),
                 "language": info.language,
-                "duration": info.duration,
+                "duration": duration,
+                "segments": segment_data,   # 👈 AQUI ESTÃO OS TIMECODES
             }
         )
     finally:
