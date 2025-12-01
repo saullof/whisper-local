@@ -5,10 +5,12 @@ import tempfile
 import shutil
 import os
 
+# Config pelas variáveis de ambiente (EasyPanel)
 MODEL_NAME = os.getenv("WHISPER_MODEL", "small")
 DEVICE = os.getenv("WHISPER_DEVICE", "cpu")  # "cpu" ou "cuda"
 COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 
+# Carrega o modelo na inicialização do container
 model = WhisperModel(MODEL_NAME, device=DEVICE, compute_type=COMPUTE_TYPE)
 
 app = FastAPI(title="Whisper Local API")
@@ -29,32 +31,22 @@ async def transcribe(file: UploadFile = File(...), language: str | None = None):
         tmp_path = tmp.name
 
     try:
-        # 👇 AQUI: pedimos timestamps de palavra
+        # Transcrição normal (sem word_timestamps pra não ficar pesado)
         segments, info = model.transcribe(
             tmp_path,
             language=language,
-            word_timestamps=True,
         )
 
+        # Texto completo
         full_text = "".join(seg.text for seg in segments)
 
+        # Monta os dados de cada segmento com start/end/text
         segment_data = []
         for seg in segments:
-            words = []
-            # seg.words só existe se word_timestamps=True
-            if getattr(seg, "words", None) is not None:
-                for w in seg.words:
-                    words.append({
-                        "word":  w.word,
-                        "start": float(w.start),
-                        "end":   float(w.end),
-                    })
-
             segment_data.append({
                 "start": float(seg.start),
                 "end":   float(seg.end),
                 "text":  seg.text,
-                "words": words,
             })
 
         # duration: usa info.duration ou o fim do último segmento
@@ -67,10 +59,10 @@ async def transcribe(file: UploadFile = File(...), language: str | None = None):
 
         return JSONResponse(
             {
-                "text": full_text.strip(),
-                "language": info.language,
-                "duration": duration,
-                "segments": segment_data,   # 👈 AQUI ESTÃO OS TIMECODES
+                "text":      full_text.strip(),
+                "language":  info.language,
+                "duration":  duration,
+                "segments":  segment_data,   # 👈 usado pelo n8n pra montar o SRT
             }
         )
     finally:
