@@ -31,13 +31,16 @@ async def transcribe(file: UploadFile = File(...), language: str | None = None):
         tmp_path = tmp.name
 
     try:
-        # Transcrição normal (sem word_timestamps pra não ficar pesado)
-        segments, info = model.transcribe(
+        # Transcrição com VAD para forçar a criação de segmentos
+        segments_iter, info = model.transcribe(
             tmp_path,
             language=language,
-            vad_filter=True,  
+            vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=300),
         )
+
+        # ⚠️ IMPORTANTE: transformar em lista para poder usar mais de uma vez
+        segments = list(segments_iter)
 
         # Texto completo
         full_text = "".join(seg.text for seg in segments)
@@ -64,7 +67,7 @@ async def transcribe(file: UploadFile = File(...), language: str | None = None):
                 "text":      full_text.strip(),
                 "language":  info.language,
                 "duration":  duration,
-                "segments":  segment_data,   # 👈 usado pelo n8n pra montar o SRT
+                "segments":  segment_data,   # 👈 agora vem preenchido
             }
         )
     finally:
